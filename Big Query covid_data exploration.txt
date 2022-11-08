@@ -1,0 +1,108 @@
+/*
+Covid 19 Data Exploration 
+Tool: Google BigQuery
+Skills used: Joins, CTE's, Windows Functions, Aggregate Functions,converting data types, creating and saving the final table
+*/
+
+Select *
+From data-project-367809.Covid_data.covid_deaths
+Where continent is not null 
+order by 3,4
+
+
+-- Selecting Data that we are going to be starting with
+
+Select Location, date, total_cases, new_cases, total_deaths, population
+From data-project-367809.Covid_data.covid_deaths
+Where continent is not null 
+order by 1,2
+
+
+-- Total Cases vs Total Deaths
+-- Shows likelihood of dying if you contract covid in your country
+
+Select Location, date, total_cases,total_deaths, (total_deaths/total_cases)*100 as DeathPercentage
+From data-project-367809.Covid_data.covid_deaths
+Where location = "United Kingdom"
+and continent is not null 
+order by 1,2
+
+
+-- Total Cases vs Population
+-- Shows what percentage of population infected with Covid
+
+Select Location, date, Population, total_cases,  (total_cases/population)*100 as PercentPopulationInfected
+From data-project-367809.Covid_data.covid_deaths
+order by 1,2
+
+
+-- Countries with Highest Infection Rate compared to Population
+
+Select Location, Population, MAX(total_cases) as HighestInfectionCount,  Max((total_cases/population))*100 as PercentPopulationInfected
+From data-project-367809.Covid_data.covid_deaths
+Group by Location, Population
+order by PercentPopulationInfected desc
+
+
+-- Countries with Highest Death Count per Population
+
+Select Location, MAX(cast(Total_deaths as int)) as TotalDeathCount
+From data-project-367809.Covid_data.covid_deaths
+Where continent is not null 
+Group by Location
+order by TotalDeathCount desc
+
+
+
+-- BREAKING THINGS DOWN BY CONTINENT
+
+-- Showing contintents with the highest death count per population
+
+Select continent, MAX(cast(Total_deaths as int)) as TotalDeathCount
+From data-project-367809.Covid_data.covid_deaths
+Where continent is not null 
+Group by continent
+order by TotalDeathCount desc
+
+
+
+-- GLOBAL NUMBERS
+
+Select SUM(new_cases) as total_cases, SUM(cast(new_deaths as int)) as total_deaths, SUM(cast(new_deaths as int))/SUM(New_Cases)*100 as DeathPercentage
+From data-project-367809.Covid_data.covid_deaths
+where continent is not null 
+order by 1,2
+
+
+
+-- Total Population vs Vaccinations
+-- Shows Percentage of Population that has recieved at least one Covid Vaccine
+
+Select death.continent, death.location, death.date, death.population, Vac.new_vaccinations,
+SUM(Vac.new_vaccinations) OVER (Partition by death.Location Order by death.location, death.Date) as RollingPeopleVaccinated
+From data-project-367809.Covid_data.covid_deaths as death
+Join data-project-367809.Covid_data.covid_vacc as Vac
+	On death.location = Vac.location
+	and death.date = Vac.date
+where death.continent is not null 
+order by 2,3
+
+
+-- Using CTE to perform Calculation on Partition By in previous query
+--creating a cte
+
+With vaccvspop as 
+
+(
+Select death.continent,death.location,death.date,Vacc.new_vaccinations, death.population,
+sum(Vacc.new_vaccinations) over (partition by death.location order by death.location, death.date)/death.population *100 as rolling_ppl_vacc_percent
+from data-project-367809.Covid_data.covid_vacc as Vacc
+JOIN data-project-367809.Covid_data.covid_deaths as death
+ on Vacc.location= death.location
+ and Vacc.date = death.date
+where death.continent is not null
+)
+select*
+from vaccvspop
+
+--Save the newly created table as a new table from save results
